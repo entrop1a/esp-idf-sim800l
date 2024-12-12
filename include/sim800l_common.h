@@ -115,3 +115,19 @@
  * 
  */
 #define SIM800L_COMMAND_LINE_ID "AT+CLIP="
+
+/*
+ * SIM800L - SMS mode.
+ *
+ * This command is used to set the SMS mode.
+ * 
+ */
+#define SIM800L_COMMAND_SMS_MODE "AT+CMGF="
+
+/*
+ * SIM800L - SMS list received Message.
+ *
+ * This command is used to list the received messages.
+ * 
+ */
+#define SIM800l_COMMAND_SMS_LIST_RECV "AT+CMGL="

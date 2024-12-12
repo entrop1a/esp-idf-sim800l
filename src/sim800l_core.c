@@ -51,11 +51,11 @@
  */
 ESP_EVENT_DEFINE_BASE(SIM800L_EVENTS);
 
-/*
- *     Event group bits (Not related to the event base)
- */
-static const int SIM800L_EVENT_GROUP_RESPONSE_OK        = BIT14;
-static const int SIM800L_EVENT_GROUP_RESPONSE_ERROR     = BIT15;
+// /*
+//  *     Event group bits (Not related to the event base)
+//  */
+// static const int SIM800L_EVENT_GROUP_RESPONSE_OK        = BIT14;
+// static const int SIM800L_EVENT_GROUP_RESPONSE_ERROR     = BIT15;
 
 /*
  *     SIM800L handle
@@ -66,7 +66,8 @@ struct sim800l
     TaskHandle_t sim800l_task_handle;
     EventGroupHandle_t sim800l_event_group_handle;
     esp_event_loop_handle_t sim800l_event_loop_handle;
-    QueueHandle_t sim800l_queue_handle;
+    QueueHandle_t sim800l_queue_bridge_handle;
+    QueueHandle_t sim800l_queue_out_handle;
 };
 
 /*
@@ -205,8 +206,16 @@ esp_err_t sim800l_init(sim800l_handle_t* sim800l_handle, sim800l_config_t* sim80
     }
 
     /* Create Queue */
-    sim800l_handle_temp->sim800l_queue_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
-    if (sim800l_handle_temp->sim800l_queue_handle == NULL)
+    sim800l_handle_temp->sim800l_queue_bridge_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
+    if (sim800l_handle_temp->sim800l_queue_bridge_handle == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "xQueueCreate failed");
+        return ESP_ERR_NO_MEM;
+    }
+
+     /* Create Queue */
+    sim800l_handle_temp->sim800l_queue_out_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
+    if (sim800l_handle_temp->sim800l_queue_out_handle == NULL)
     {
         ESP_LOGE(SIM800L_TAG, "xQueueCreate failed");
         return ESP_ERR_NO_MEM;
@@ -237,14 +246,14 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
         ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     /* Create task */
-    if (xTaskCreate (sim800l_bridge_task,
-                                    SIM800L_TASK_NAME, 
-                                    SIM800L_TASK_STACK_SIZE,
-                                    sim800l_handle,
-                                    SIM800L_TASK_PRIORITY,
-                                    &sim800l_handle->sim800l_task_handle) != pdPASS)
+    if (xTaskCreate(sim800l_bridge_task,
+                    SIM800L_TASK_NAME,
+                    SIM800L_TASK_STACK_SIZE,
+                    sim800l_handle,
+                    SIM800L_TASK_PRIORITY,
+                    &sim800l_handle->sim800l_task_handle) != pdPASS)
     {
         ESP_LOGE(SIM800L_TAG, "xTaskCreate failed");
         return ESP_FAIL;
@@ -359,31 +368,25 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
     if (response != NULL)
     {
         /* Send Queue */
-        if (xQueueSend(sim800l_handle->sim800l_queue_handle, response, 0) != pdPASS)
+        if (xQueueSend(sim800l_handle->sim800l_queue_bridge_handle, command, timeout) != pdPASS)
         {
             ESP_LOGE(SIM800L_TAG, "xQueueSend failed"); 
             return ESP_FAIL;
         }
 
+        char respo_temp[MAX_PARAMS_SIZE] = {0};
+
         /* Wait for response */
-        BaseType_t event_response = xEventGroupWaitBits(sim800l_handle->sim800l_event_group_handle,
-                                                        SIM800L_EVENT_GROUP_RESPONSE_OK | 
-                                                        SIM800L_EVENT_GROUP_RESPONSE_ERROR,
-                                                        pdTRUE,
-                                                        pdFALSE,
-                                                        timeout);
-        if (event_response & SIM800L_EVENT_GROUP_RESPONSE_OK)
+        if (xQueueReceive(sim800l_handle->sim800l_queue_out_handle, respo_temp, timeout) != pdPASS)
         {
-            return ESP_OK;
-        }
-        else if (event_response & SIM800L_EVENT_GROUP_RESPONSE_ERROR)
-        {
-            ESP_LOGI(SIM800L_TAG, "Response ERROR");
+            ESP_LOGE(SIM800L_TAG, "xQueueReceive failed"); 
             return ESP_FAIL;
         }
 
-        ESP_LOGE(SIM800L_TAG, "Timeout"); 
-        return ESP_FAIL;
+        /* Copy response */
+        memcpy(response, respo_temp, strlen(respo_temp));
+
+        return ESP_OK;
     }
 
     return ESP_ERR_INVALID_ARG;
@@ -514,7 +517,8 @@ static void sim800l_bridge_task(void *args)
 
     while (true)
     {
-        uint8_t expected_response[MAX_PARAMS_SIZE] = {0};
+        uint8_t command_response[MAX_PARAMS_SIZE] = {0};
+        uint8_t response[MAX_PARAMS_SIZE] = {0};
 
         /* Read data from sim800l uart */
         uint8_t data[256] = {0};
@@ -523,18 +527,33 @@ static void sim800l_bridge_task(void *args)
             // ESP_LOGI(SIM800L_TAG, "Received data: %s", data);
 
             /* Receive Queue */
-            if (xQueueReceive(sim800l_handle->sim800l_queue_handle, expected_response, 0) == pdTRUE)
+            if (xQueueReceive(sim800l_handle->sim800l_queue_bridge_handle, command_response, 0) == pdTRUE)
             {
-                /* Compare data */
-                if (strnstr((const char*)expected_response, (const char*)data, strlen((const char*)expected_response)) == NULL)
+                char *token_respose = calloc(1, MAX_TOKEN_SIZE * sizeof(char));
+                token_respose = strtok((char *)data, "\r\n");
+                
+                /* Check if the token is a command*/
+                if (strnstr((const char *)command_response, (const char *)token_respose, strlen((const char *)command_response)) != NULL)
                 {
-                    /* Set event to notify that data has been received */
-                    xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, SIM800L_EVENT_GROUP_RESPONSE_OK);
-                }
-                else
-                {
-                    /* Set event to notify that data has been received */
-                    xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, SIM800L_EVENT_GROUP_RESPONSE_ERROR);
+                    /* Extract response */
+                    token_respose = strtok(NULL, "\r\n");
+                    do
+                    {
+                        if (strncat((char *)response, (const char *)token_respose, strlen((const char *)token_respose)) == NULL)
+                        {
+                            ESP_LOGE(SIM800L_TAG, "strncat failed");
+                        }
+                        
+                        /* Get next token */
+                        token_respose = strtok(NULL, "\r\n");
+                    } while (token_respose);
+
+                    if (xQueueSend(sim800l_handle->sim800l_queue_out_handle, response, 0) != pdPASS)
+                    {
+                        ESP_LOGE(SIM800L_TAG, "xQueueSend failed");
+                    }
+
+                    free(token_respose);
                 }
             }
 

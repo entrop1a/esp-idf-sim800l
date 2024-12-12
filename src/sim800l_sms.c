@@ -23,7 +23,7 @@
 /*
  *     Public functions development
  */
-esp_err_t sim800l_sms_sel_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode_t sms_mode)
+sim800l_ret_t sim800l_sms_sel_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode_t sms_mode)
 {
     ESP_LOGD(SIM800L_SMS_TAG, "%s", __func__);
 
@@ -37,13 +37,18 @@ esp_err_t sim800l_sms_sel_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode
 
     /* Allocate dinamic memory */
     uint8_t *command = calloc(command_length, sizeof(uint8_t));
+    if (command == NULL)
+    {
+        ESP_LOGE(SIM800L_SMS_TAG, "Memory allocation failed");
+        return SIM800L_RET_ERROR_MEM;
+    }
 
     /* Assembly of the command to be sent */
     if (snprintf((char*)command, command_length, "%s%d\r\n", SIM800L_COMMAND_SMS_MODE, sms_mode) < 0)
     {
         ESP_LOGE(SIM800L_SMS_TAG, "Assembly of the command to be sent failed");
         free(command);
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR_BUILD_COMMAND;
     }
 
     /* Send AT command */
@@ -52,46 +57,46 @@ esp_err_t sim800l_sms_sel_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode
     {
         ESP_LOGE(SIM800L_SMS_TAG, "sim800l_call_answer failed: %s", esp_err_to_name(ret));
         free(command);
-        return ret;
+        return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
     if (strncmp(response, "OK", strlen("OK")) != 0)
     {
         ESP_LOGE(SIM800L_SMS_TAG, "sim800l_call_answer failed: %s", esp_err_to_name(ret));
         free(command);
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR;
     }
 
     free(command);
-    return ESP_OK;
+    return SIM800L_RET_OK;
 }
 
-esp_err_t sim800l_sms_list_messages(sim800l_handle_t sim800l_handle, sim800l_sms_list_t sms_list)
+sim800l_ret_t sim800l_sms_list_messages(sim800l_handle_t sim800l_handle, sim800l_sms_list_t sms_list)
 {
     return ESP_OK;
 }
 
-esp_err_t sim800l_sms_read_message(sim800l_handle_t sim800l_handle, uint32_t index, uint8_t *message)
+sim800l_ret_t sim800l_sms_read_message(sim800l_handle_t sim800l_handle, uint32_t index, uint8_t *message)
 {
     return ESP_OK;
 }
 
-esp_err_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, uint8_t *number, uint8_t *message)
+sim800l_ret_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, uint8_t *number, uint8_t *message)
 {
     return ESP_OK;
 }
 
-esp_err_t sim800l_sms_delete_message(sim800l_handle_t sim800l_handle, uint32_t delete_flag, uint32_t index)
+sim800l_ret_t sim800l_sms_delete_message(sim800l_handle_t sim800l_handle, uint32_t delete_flag, uint32_t index)
 {
     return ESP_OK;
 }
 
-esp_err_t sim800l_sms_store_message(sim800l_handle_t sim800l_handle, uint8_t *message)
+sim800l_ret_t sim800l_sms_store_message(sim800l_handle_t sim800l_handle, uint8_t *message)
 {
     return ESP_OK;
 }
 
-esp_err_t sim800l_sms_send_stored_message(sim800l_handle_t sim800l_handle, uint32_t index, uint8_t *message)
+sim800l_ret_t sim800l_sms_send_stored_message(sim800l_handle_t sim800l_handle, uint32_t index, uint8_t *message)
 {
     return ESP_OK;
 }

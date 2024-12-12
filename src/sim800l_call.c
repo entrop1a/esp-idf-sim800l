@@ -23,7 +23,7 @@
 /*
  *     Public functions development
  */
-esp_err_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *number)
+sim800l_ret_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *number)
 {
     ESP_LOGD(SIM800L_CALL_TAG, "%s", __func__);
 
@@ -32,13 +32,18 @@ esp_err_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *nu
     
     /* Allocate dinamic memory */
     uint8_t *command = calloc(command_length, sizeof(uint8_t));
+    if (command == NULL)
+    {
+        ESP_LOGE(SIM800L_CALL_TAG, "Memory allocation failed");
+        return SIM800L_RET_ERROR_MEM;
+    }
 
     /* Assembly of the command to be sent */
     if (snprintf((char*)command, command_length, "%s%s;\r\n", SIM800L_COMMAND_CALL, number) < 0)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "Assembly of the command to be sent failed");
         free(command);
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR_BUILD_COMMAND;
     }
 
     /* Response */
@@ -50,21 +55,21 @@ esp_err_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *nu
     {
         ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_make_call failed: %s", esp_err_to_name(ret));
         free(command);
-        return ret;
+        return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
     if (strncmp(response, "OK", strlen("OK")) != 0)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_make_call failed");
         free(command);
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR;
     }
 
     free(command);
-    return ESP_OK;
+    return SIM800L_RET_OK;
 }
 
-esp_err_t sim800l_call_answer(sim800l_handle_t sim800l_handle, sim800l_call_response_t call_response)
+sim800l_ret_t sim800l_call_answer(sim800l_handle_t sim800l_handle, sim800l_call_response_t call_response)
 {
     ESP_LOGD(SIM800L_CALL_TAG, "%s", __func__);
 
@@ -81,7 +86,7 @@ esp_err_t sim800l_call_answer(sim800l_handle_t sim800l_handle, sim800l_call_resp
         if (ret != ESP_OK)
         {
             ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_answer failed: %s", esp_err_to_name(ret));
-            return ret;
+            return SIM800L_RET_ERROR_SEND_COMMAND;
         }
     }
 
@@ -90,23 +95,21 @@ esp_err_t sim800l_call_answer(sim800l_handle_t sim800l_handle, sim800l_call_resp
     if (ret != ESP_OK)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_answer failed: %s", esp_err_to_name(ret));
-        return ret;
+        return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
     if (strncmp(response, "OK", strlen("OK")) != 0)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_answer failed");
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR;
     }    
 
-    return ESP_OK;
+    return SIM800L_RET_OK;
 }
 
-esp_err_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_call_line_id_t call_line_id)
+sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_call_line_id_t call_line_id)
 {
     ESP_LOGD(SIM800L_CALL_TAG, "%s", __func__);
-
-    esp_err_t ret = ESP_FAIL;
 
     /* Response */
     char response[10] = {0};
@@ -116,31 +119,36 @@ esp_err_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_ca
 
     /* Allocate dinamic memory */
     uint8_t *command = calloc(command_length, sizeof(uint8_t));
+    if (command == NULL)
+    {
+        ESP_LOGE(SIM800L_CALL_TAG, "Memory allocation failed");
+        return SIM800L_RET_ERROR_MEM;
+    }
 
     /* Assembly of the command to be sent */
     if (snprintf((char*)command, command_length, "%s%d\r\n", SIM800L_COMMAND_CALL_HANGUP, call_line_id) < 0)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "Assembly of the command to be sent failed");
         free(command);
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR_BUILD_COMMAND;
     }
 
     /* Send AT command */
-    ret = sim800l_out_data(sim800l_handle, (uint8_t *)command, (uint8_t *)response, 1000);
+    esp_err_t ret = sim800l_out_data(sim800l_handle, (uint8_t *)command, (uint8_t *)response, 1000);
     if (ret != ESP_OK)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_answer failed: %s", esp_err_to_name(ret));
         free(command);
-        return ret;
+        return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
     if (strncmp(response, "OK", strlen("OK")) != 0)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "sim800l_call_answer failed");
         free(command);
-        return ESP_FAIL;
+        return SIM800L_RET_ERROR;
     }
 
     free(command);
-    return ESP_OK;
+    return SIM800L_RET_OK;
 }

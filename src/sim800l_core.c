@@ -51,12 +51,6 @@
  */
 ESP_EVENT_DEFINE_BASE(SIM800L_EVENTS);
 
-// /*
-//  *     Event group bits (Not related to the event base)
-//  */
-// static const int SIM800L_EVENT_GROUP_RESPONSE_OK        = BIT14;
-// static const int SIM800L_EVENT_GROUP_RESPONSE_ERROR     = BIT15;
-
 /*
  *     SIM800L handle
  */

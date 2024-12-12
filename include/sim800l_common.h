@@ -13,6 +13,18 @@
 #pragma once
 
 /*
+ *     SIM800L returns codes
+ */
+
+typedef int sim800l_ret_t;
+
+#define SIM800L_RET_OK 0
+#define SIM800L_RET_ERROR -1
+#define SIM800L_RET_ERROR_MEM 1
+#define SIM800L_RET_ERROR_BUILD_COMMAND 2
+#define SIM800L_RET_ERROR_SEND_COMMAND 3
+
+/*
  *     URC names
  */
 

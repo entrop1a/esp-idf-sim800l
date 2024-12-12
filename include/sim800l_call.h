@@ -42,9 +42,9 @@ extern "C" {
 /*
  *     SIM800L functions prototypes
  */
-esp_err_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *number);
-esp_err_t sim800l_call_response(sim800l_handle_t sim800l_handle, sim800l_call_response_t call_response);
-esp_err_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_call_line_id_t call_line_id);
+sim800l_ret_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *number);
+sim800l_ret_t sim800l_call_response(sim800l_handle_t sim800l_handle, sim800l_call_response_t call_response);
+sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_call_line_id_t call_line_id);
 
 #ifdef __cplusplus
 }

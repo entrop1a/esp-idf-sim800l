@@ -29,7 +29,7 @@
 #define SIM800L_GPIO_NC                 GPIO_NUM_NC
 
 #define NUM_OF_PARAMS                   1
-#define MAX_PARAMS_SIZE                 100 /* 100*sizeof(uint8_t) = 100 bytes */
+#define MAX_PARAMS_SIZE                 512 /* 100*sizeof(uint8_t) = 100 bytes */
 
 #define SIM800L_TASK_STACK_SIZE         4096
 #define SIM800L_TASK_PRIORITY           1
@@ -38,7 +38,7 @@
 
 #define SIM800L_UART_BUFFER_SIZE        4096
 
-#define MAX_TOKEN_SIZE                  100
+#define MAX_TOKEN_SIZE                  512
 
 
 /*
@@ -355,6 +355,8 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
         if (sim800l_uart_send_data(sim800l_handle, command, strlen((char *)command)) < 1)
         {
             ESP_LOGE(SIM800L_TAG, "uart_write_bytes failed");
+
+            return ESP_FAIL;
         }
     }
 
@@ -383,7 +385,40 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
         return ESP_OK;
     }
 
-    return ESP_ERR_INVALID_ARG;
+    return ESP_OK;
+}
+
+esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, EventBits_t event, uint32_t timeout)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    /* Check if handle is NULL */
+    if (sim800l_handle == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Check if data_set is NULL */
+    if (command != NULL)
+    {
+        /* Send AT command */
+        if (sim800l_uart_send_data(sim800l_handle, command, strlen((char *)command)) < 1)
+        {
+            ESP_LOGE(SIM800L_TAG, "uart_write_bytes failed");
+
+            return ESP_FAIL;
+        }
+    }
+
+    /* Wait for response */
+    BaseType_t events_ret = xEventGroupWaitBits(sim800l_handle->sim800l_event_group_handle, event, pdTRUE, pdTRUE, timeout);
+    if (events_ret == event)
+    {
+        return ESP_OK;
+    }
+
+    return ESP_FAIL;
 }
 
 /*
@@ -515,16 +550,22 @@ static void sim800l_bridge_task(void *args)
         uint8_t response[MAX_PARAMS_SIZE] = {0};
 
         /* Read data from sim800l uart */
-        uint8_t data[256] = {0};
-        if (sim800l_uart_recv_data(sim800l_handle, data, sizeof(data), 50) > 0)
+        uint8_t data[MAX_PARAMS_SIZE] = {0};
+        if (sim800l_uart_recv_data(sim800l_handle, data, sizeof(data), MAX_PARAMS_SIZE) > 0)
         {
             // ESP_LOGI(SIM800L_TAG, "Received data: %s", data);
 
             /* Receive Queue */
             if (xQueueReceive(sim800l_handle->sim800l_queue_bridge_handle, command_response, 0) == pdTRUE)
             {
-                char *token_respose = calloc(1, MAX_TOKEN_SIZE * sizeof(char));
-                token_respose = strtok((char *)data, "\r\n");
+                // ESP_LOGI(SIM800L_TAG, "Received command: %s", command_response);
+
+                /* Data temp */
+                uint8_t data_temp[MAX_PARAMS_SIZE] = {0};
+                strncpy((char *)data_temp, (const char *)data, MAX_PARAMS_SIZE);
+
+                /* Token response */
+                char *token_respose = strtok((char *)data_temp, "\r\n");
                 
                 /* Check if the token is a command*/
                 if (strnstr((const char *)command_response, (const char *)token_respose, strlen((const char *)command_response)) != NULL)
@@ -533,74 +574,91 @@ static void sim800l_bridge_task(void *args)
                     token_respose = strtok(NULL, "\r\n");
                     do
                     {
+                        // ESP_LOGI(SIM800L_TAG, "Token response: %s", token_respose);
+                        /* Check if token starts with '+' */
+                        if (token_respose[0] == '+')
+                        {
+                            /* Remove '+<>:' */
+                            char *result_find = strchr((const char *)token_respose, ':');
+                            if (result_find != NULL)
+                            {
+                                token_respose = result_find + 1;
+                            }
+                        }
+
+                        /* Add token to response */
                         if (strncat((char *)response, (const char *)token_respose, strlen((const char *)token_respose)) == NULL)
                         {
                             ESP_LOGE(SIM800L_TAG, "strncat failed");
                         }
-                        
+
+                        /* Add '\r\n' to response */
+                        if (strncat((char *)response, "\r\n", strlen("\r\n") + 1) == NULL)
+                        {
+                            ESP_LOGE(SIM800L_TAG, "strncat failed");
+                        }
+
                         /* Get next token */
                         token_respose = strtok(NULL, "\r\n");
-                    } while (token_respose);
-
+                    } while (token_respose != NULL);
+                    
+                    /* Send response */
                     if (xQueueSend(sim800l_handle->sim800l_queue_out_handle, response, 0) != pdPASS)
                     {
                         ESP_LOGE(SIM800L_TAG, "xQueueSend failed");
                     }
-
-                    free(token_respose);
                 }
             }
 
             /* Extract tokens */
-            char *token = calloc(1, MAX_TOKEN_SIZE * sizeof(char));
-            token = strtok((char*)data, "\r\n");
-
+            char **urc_args = (char **)calloc(5, sizeof(char *));
+            char *token = strtok((char*)data, "\r\n");
             do
             {
-                if (token != NULL)
+                // ESP_LOGI(SIM800L_TAG, "Token URC: %s", token);
+                memset(urc_args, 0, sizeof(char *) * 5);
+                char urc[25] = {0};
+
+                /* Check if the token is a URC in format: +<token>:*/
+                if (token[0] == '+')
                 {
-                    char urc[25] = {0};
+                    /* Extract URC (+<urc>:args) */
+                    token = strtok(token, ":");
+                    strncpy(urc, token, strlen(token));
 
-                    char **urc_args = calloc(1, 5 * sizeof(char*));
-
-                    /* Check if the token is a URC in format: +<token>:*/
-                    if (token[0] == '+')
+                    int i = 0;
+                    token = strtok(NULL, ",");
+                    do
                     {
-                        /* Extract URC (+<urc>:args) */
-                        token = strtok(token, ":");
-                        strncpy(urc, token, strlen(token));
-
-                        int i = 0;
+                        /* Extract args */
+                        urc_args[i] = strdup(token);
+                        
+                        /* Get next token */
                         token = strtok(NULL, ",");
-                        do
-                        {
-                            urc_args[i] = strdup(token);
-
-                            token = strtok(NULL, ",");
-                            i++;
-                        } while ((token != NULL) && (i < 5));
-                    }
-                    else
-                    {
-                        /* Extract simple URC */
-                        strncpy(urc, token, strlen(token));
-                    }
-
-                    /* Interpret URC */
-                    sim800l_urc_event_t urc_event = sim800l_urc_interpret((const char *)urc, urc_args);
-                    if (urc_event != -1)
-                    {
-                        xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, urc_event);
-                    }
-
-                    free(urc_args);
+                        i++;
+                    } while ((token != NULL) && (i < 5));
+                }
+                else
+                {
+                    /* Extract simple URC */
+                    strncpy(urc, token, strlen(token));
                 }
 
+                /* Interpret URC */
+                sim800l_urc_event_t urc_event = sim800l_urc_interpret((const char *)urc, urc_args);
+                if (urc_event != -1)
+                {
+                    /* Set URC event */
+                    xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, urc_event);
+                }
+                
                 /* Get next token */
                 token = strtok(NULL, "\r\n");
-            } while (token);
+            } while (token != NULL);
 
-            free(token);
+            
+            free(urc_args);
+            urc_args = NULL;
         }
 
         vTaskDelay(50 / portTICK_PERIOD_MS);

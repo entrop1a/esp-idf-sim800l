@@ -23,8 +23,8 @@
  *     SIM800L SMS mode
  */
 typedef enum {
-    SIM800L_SMS_MODE_TEXT = 0,
-    SIM800L_SMS_MODE_PDU
+    SIM800L_SMS_MODE_PDU = 0,
+    SIM800L_SMS_MODE_TEXT
 } sim800l_sms_mode_t;
 
 /*
@@ -38,6 +38,15 @@ typedef enum {
     SIM800L_SMS_ALL_MESSAGES
 } sim800l_sms_list_t;
 
+/*
+ *     SIM800L SMS
+ */
+typedef struct {
+    char source_number[16];
+    char utc_date[32];
+    char payload[160];
+} sim800l_sms_message_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,13 +54,11 @@ extern "C" {
 /*
  *     SIM800L functions prototypes
  */
-sim800l_ret_t sim800l_sms_sel_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode_t sms_mode);
-sim800l_ret_t sim800l_sms_list_messages(sim800l_handle_t sim800l_handle, sim800l_sms_list_t sms_list);
-sim800l_ret_t sim800l_sms_read_message(sim800l_handle_t sim800l_handle, uint32_t index, uint8_t *message);
-sim800l_ret_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, uint8_t *number, uint8_t *message);
+sim800l_ret_t sim800l_sms_set_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode_t sms_mode);
+sim800l_sms_mode_t sim800l_sms_get_mode(sim800l_handle_t sim800l_handle);
+sim800l_ret_t sim800l_sms_read_message(sim800l_handle_t sim800l_handle, uint32_t index, sim800l_sms_message_t *message);
+sim800l_ret_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, const char *number, const char *message);
 sim800l_ret_t sim800l_sms_delete_message(sim800l_handle_t sim800l_handle, uint32_t delete_flag, uint32_t index);
-sim800l_ret_t sim800l_sms_store_message(sim800l_handle_t sim800l_handle, uint8_t *message);
-sim800l_ret_t sim800l_sms_send_stored_message(sim800l_handle_t sim800l_handle, uint32_t index, uint8_t *message);
 
 #ifdef __cplusplus
 }

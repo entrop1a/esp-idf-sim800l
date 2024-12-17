@@ -37,7 +37,7 @@ sim800l_ret_t sim800l_command_AT(sim800l_handle_t sim800l_handle)
         return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
-    if (strncmp(response, "OK", strlen("OK")) != 0)
+    if (strnstr(response, "OK", 10) == NULL)
     {
         ESP_LOGE(SIM800L_MISC_TAG, "sim800l_command_AT failed");
         return SIM800L_RET_ERROR;

@@ -54,6 +54,7 @@ static sim800l_urc_event_t sim800l_urc_cfun(char **args);
 static sim800l_urc_event_t sim800l_urc_cpin(char **args);
 static sim800l_urc_event_t sim800l_urc_call_ready(char **args);
 static sim800l_urc_event_t sim800l_urc_sms_ready(char **args);
+static sim800l_urc_event_t sim800l_urc_sms_send(char **args);
 
 /*
  *     Public functions development
@@ -97,6 +98,13 @@ bool sim800l_urc_create_table(void)
         return false;
     }
     
+    /* Insert URC SMS_SEND */
+    if (insert_urc_table(SIM800L_URC_SMS_SEND, 6, sim800l_urc_sms_send) == false)
+    {
+        ESP_LOGE(SIM800L_URC_TAG, "insert_urc_table failed");
+        return false;
+    }
+
     return true;
 }
    
@@ -231,4 +239,11 @@ sim800l_urc_event_t sim800l_urc_sms_ready(char **args)
     ESP_LOGD(SIM800L_URC_TAG, "%s", __func__);
 
     return SIM800L_URC_EVENT_SMS_READY;
+}
+
+sim800l_urc_event_t sim800l_urc_sms_send(char **args)
+{
+    ESP_LOGD(SIM800L_URC_TAG, "%s", __func__);
+
+    return SIM800L_URC_EVENT_SMS_SEND;
 }

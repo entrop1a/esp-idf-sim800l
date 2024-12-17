@@ -23,6 +23,7 @@ typedef int sim800l_ret_t;
 #define SIM800L_RET_ERROR_MEM 1
 #define SIM800L_RET_ERROR_BUILD_COMMAND 2
 #define SIM800L_RET_ERROR_SEND_COMMAND 3
+#define SIM800L_RET_INVALID_ARG 4
 
 /*
  *     URC names
@@ -33,6 +34,7 @@ typedef int sim800l_ret_t;
 #define SIM800L_URC_CPIN "+CPIN"
 #define SIM800L_URC_CALL_READY "Call Ready"
 #define SIM800L_URC_SMS_READY "SMS Ready"
+#define SIM800L_URC_SMS_SEND "+CMGS"
 
 /*
  * SIM800L - Test command
@@ -134,7 +136,7 @@ typedef int sim800l_ret_t;
  * This command is used to set the SMS mode.
  * 
  */
-#define SIM800L_COMMAND_SMS_MODE "AT+CMGF="
+#define SIM800L_COMMAND_SMS_MODE "AT+CMGF"
 
 /*
  * SIM800L - SMS list received Message.
@@ -142,4 +144,30 @@ typedef int sim800l_ret_t;
  * This command is used to list the received messages.
  * 
  */
-#define SIM800l_COMMAND_SMS_LIST_RECV "AT+CMGL="
+#define SIM800l_COMMAND_SMS_LIST_RECV "AT+CMGL"
+
+
+/*
+ * SIM800L - SMS delete Message.
+ *
+ * This command is used to delete a message.
+ * 
+ */
+#define SIM800L_COMMAND_SMS_DEL "AT+CMGD"
+
+/*
+ * SIM800L - SMS read Message.
+ *
+ * This command is used to read a message.
+ *
+ */
+#define SIM800L_COMMAND_SMS_READ "AT+CMGR"
+
+
+/*
+ * SIM800L - SMS send Message.
+ *
+ * This command is used to send a message.
+ *
+ */
+#define SIM800L_COMMAND_SMS_SEND "AT+CMGS"

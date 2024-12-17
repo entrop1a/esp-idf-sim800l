@@ -35,6 +35,7 @@ typedef enum
     SIM800L_URC_EVENT_CPIN_READY    = 1 << 4,
     SIM800L_URC_EVENT_CALL_READY    = 1 << 5,
     SIM800L_URC_EVENT_SMS_READY     = 1 << 6,
+    SIM800L_URC_EVENT_SMS_SEND      = 1 << 7
 }
 sim800l_urc_event_t;
 

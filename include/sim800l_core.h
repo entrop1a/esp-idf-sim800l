@@ -69,6 +69,7 @@ esp_err_t sim800l_init(sim800l_handle_t *sim800l_handle, sim800l_config_t *sim80
 esp_err_t sim800l_start(sim800l_handle_t sim800l_handle);
 esp_err_t sim800l_register_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler, void *sim800l_event_handler_arg);
 esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, uint8_t *response, uint32_t timeout);
+esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, EventBits_t event, uint32_t timeout);
 
 
 #ifdef __cplusplus

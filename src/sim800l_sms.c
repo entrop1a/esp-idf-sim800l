@@ -238,9 +238,6 @@ sim800l_ret_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, const ch
 
     /* Get command length */
     uint32_t command_length = strlen(SIM800L_COMMAND_SMS_SEND) + 2*sizeof(char) + strlen(number) + strlen("\r\n") + 1; /* strlen("=%d,%d\r\n") = 6*sizeof(char) */
-    
-    int i = 0;
-    ESP_LOGI(SIM800L_SMS_TAG, "OK: %d", i++);
 
     /* Allocate dinamic memory */
     uint8_t *command = (uint8_t *)calloc(command_length, sizeof(uint8_t));
@@ -271,8 +268,6 @@ sim800l_ret_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, const ch
 
     free(command);
     command = NULL;
-
-    ESP_LOGI(SIM800L_SMS_TAG, "OK: %d", i++);
 
     if (strncmp(response, ">", strlen(">")) != 0)
     {

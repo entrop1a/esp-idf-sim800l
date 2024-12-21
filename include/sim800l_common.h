@@ -171,3 +171,27 @@ typedef int sim800l_ret_t;
  *
  */
 #define SIM800L_COMMAND_SMS_SEND "AT+CMGS"
+
+/*
+ * SIM800L - SMS bearer settings.
+ *
+ * This command is used to set the bearer settings.
+ *
+ */
+#define SIM800L_COMMAND_BEARER "AT+SAPBR"
+
+/*
+ * SIM800L - HTTP init.
+ *
+ * This command is used to initialize the HTTP module.
+ *
+ */
+#define SIM800L_COMMAND_HTTP_INIT "AT+HTTPINIT\r\n"
+
+/*
+ * SIM800L - HTTP terminate.
+ *
+ * This command is used to terminate the HTTP module.
+ *
+ */
+#define SIM800L_COMMAND_HTTP_TERMINATE "AT+HTTPTERM\r\n"

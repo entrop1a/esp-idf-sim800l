@@ -110,7 +110,7 @@ sim800l_ret_t sim800l_bearer_query(sim800l_handle_t sim800l_handle, sim800l_bear
     /* Check response */
     if (strnstr((char *)response, "ERROR", sizeof(response)) != NULL)
     {
-        ESP_LOGE(SIM800L_BEARER_TAG, "sim800l_call_answer failed");
+        ESP_LOGE(SIM800L_BEARER_TAG, "Command failed");
         return SIM800L_RET_ERROR;
     }
 

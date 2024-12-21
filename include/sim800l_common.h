@@ -195,3 +195,27 @@ typedef int sim800l_ret_t;
  *
  */
 #define SIM800L_COMMAND_HTTP_TERMINATE "AT+HTTPTERM\r\n"
+
+/*
+ * SIM800L - HTTP parameter.
+ *
+ * This command is used to set or get the HTTP parameter.
+ *
+ */
+#define SIM800L_COMMAND_HTTP_PARAM "AT+HTTPPARA"
+
+/*
+ * SIM800L - HTTP action.
+ *
+ * This command is used to perform an HTTP action.
+ *
+ */
+#define SIM800L_COMMAND_HTTP_ACTION "AT+HTTPACTION"
+
+/*
+ * SIM800L - HTTP read.
+ *
+ * This command is used to read data from the HTTP server.
+ *
+ */
+#define SIM800L_COMMAND_HTTP_READ "AT+HTTPREAD"

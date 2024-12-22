@@ -60,8 +60,8 @@ struct sim800l
     TaskHandle_t sim800l_task_handle;
     EventGroupHandle_t sim800l_event_group_handle;
     esp_event_loop_handle_t sim800l_event_loop_handle;
-    QueueHandle_t sim800l_queue_bridge_handle;
-    QueueHandle_t sim800l_queue_out_handle;
+    QueueHandle_t sim800l_queue_tx_handle;
+    QueueHandle_t sim800l_queue_rx_handle;
 };
 
 /*
@@ -105,17 +105,17 @@ esp_err_t sim800l_init(sim800l_handle_t* sim800l_handle, sim800l_config_t* sim80
     /* Assign config values to temporary handle */
     sim800l_handle_temp->config = sim800l_config;
 
+    /* Configure reset pin */
+    ret = gpio_set_direction(sim800l_handle_temp->config->sim800l_rst_pin, GPIO_MODE_OUTPUT);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "gpio_set_direction failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
     /* Setting power pin and reset pin */
     if (sim800l_handle_temp->config->sim800l_pwr_pin == GPIO_NUM_NC)
     {
-        /* Configure reset pin */
-        ret = gpio_set_direction(sim800l_handle_temp->config->sim800l_rst_pin, GPIO_MODE_OUTPUT);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(SIM800L_TAG, "gpio_set_direction failed: %s", esp_err_to_name(ret));
-            return ret;
-        }
-
         /* Module control by reset pin */
         ret = gpio_set_level(sim800l_handle_temp->config->sim800l_rst_pin, 0);
         if (ret != ESP_OK)
@@ -147,27 +147,33 @@ esp_err_t sim800l_init(sim800l_handle_t* sim800l_handle, sim800l_config_t* sim80
     }
 
     /* Setting DTR pin */
-    ret = gpio_set_direction(sim800l_handle_temp->config->sim800l_dtr_pin, GPIO_MODE_OUTPUT);
-    if (ret != ESP_OK)
+    if (sim800l_handle_temp->config->sim800l_dtr_pin != GPIO_NUM_NC)
     {
-        ESP_LOGE(SIM800L_TAG, "gpio_set_direction failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+        ret = gpio_set_direction(sim800l_handle_temp->config->sim800l_dtr_pin, GPIO_MODE_OUTPUT);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_set_direction failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
 
-    /* Set DTR pin low */
-    ret = gpio_set_level(sim800l_handle_temp->config->sim800l_dtr_pin, 0);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "gpio_set_level failed: %s", esp_err_to_name(ret));
-        return ret;
+        /* Set DTR pin low */
+        ret = gpio_set_level(sim800l_handle_temp->config->sim800l_dtr_pin, 0);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_set_level failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
     }
 
     /* Setting RING pin */
-    ret = gpio_set_direction(sim800l_handle_temp->config->sim800l_ring_pin, GPIO_MODE_INPUT);
-    if (ret != ESP_OK)
+    if (sim800l_handle_temp->config->sim800l_ring_pin != GPIO_NUM_NC)
     {
-        ESP_LOGE(SIM800L_TAG, "gpio_set_direction failed: %s", esp_err_to_name(ret));
-        return ret;
+        ret = gpio_set_direction(sim800l_handle_temp->config->sim800l_ring_pin, GPIO_MODE_INPUT);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_set_direction failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
     }
 
     /* Init sim800l uart driver */
@@ -200,16 +206,16 @@ esp_err_t sim800l_init(sim800l_handle_t* sim800l_handle, sim800l_config_t* sim80
     }
 
     /* Create Queue */
-    sim800l_handle_temp->sim800l_queue_bridge_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
-    if (sim800l_handle_temp->sim800l_queue_bridge_handle == NULL)
+    sim800l_handle_temp->sim800l_queue_tx_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
+    if (sim800l_handle_temp->sim800l_queue_tx_handle == NULL)
     {
         ESP_LOGE(SIM800L_TAG, "xQueueCreate failed");
         return ESP_ERR_NO_MEM;
     }
 
      /* Create Queue */
-    sim800l_handle_temp->sim800l_queue_out_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
-    if (sim800l_handle_temp->sim800l_queue_out_handle == NULL)
+    sim800l_handle_temp->sim800l_queue_rx_handle = xQueueCreate(NUM_OF_PARAMS, MAX_PARAMS_SIZE);
+    if (sim800l_handle_temp->sim800l_queue_rx_handle == NULL)
     {
         ESP_LOGE(SIM800L_TAG, "xQueueCreate failed");
         return ESP_ERR_NO_MEM;
@@ -226,6 +232,86 @@ esp_err_t sim800l_init(sim800l_handle_t* sim800l_handle, sim800l_config_t* sim80
     *sim800l_handle = sim800l_handle_temp;
 
     return ESP_OK;
+}
+
+esp_err_t sim800l_deinit(sim800l_handle_t sim800l_handle)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    /* Check if handle is NULL */
+    if (sim800l_handle == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Reset RST pin */
+    esp_err_t ret = gpio_reset_pin(sim800l_handle->config->sim800l_rst_pin);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "gpio_reset_pin failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    /* Reset PWR pin */
+    if (sim800l_handle->config->sim800l_pwr_pin != GPIO_NUM_NC)
+    {
+        /* Reset PWRKEY pin */
+        ret = gpio_reset_pin(sim800l_handle->config->sim800l_pwr_pin);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_reset_pin failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+
+    /* Reset DTR pin */
+    if (sim800l_handle->config->sim800l_dtr_pin != GPIO_NUM_NC)
+    {
+        /* Reset DTR pin */
+        ret = gpio_reset_pin(sim800l_handle->config->sim800l_dtr_pin);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_reset_pin failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+
+    /* Reset RING pin */
+    if (sim800l_handle->config->sim800l_ring_pin != GPIO_NUM_NC)
+    {
+        /* Reset RING pin */
+        ret = gpio_reset_pin(sim800l_handle->config->sim800l_ring_pin);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_reset_pin failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+
+    /* Delete event loop */
+    ret = esp_event_loop_delete(sim800l_handle->sim800l_event_loop_handle);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "esp_event_loop_delete failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    /* Delete Event Group */
+    vEventGroupDelete(sim800l_handle->sim800l_event_group_handle);
+
+    /* Delete Queue */
+    vQueueDelete(sim800l_handle->sim800l_queue_tx_handle);
+    vQueueDelete(sim800l_handle->sim800l_queue_rx_handle);
+
+    /* Delete URC table */
+    sim800l_urc_delete_table();
+
+    free(sim800l_handle);
+    sim800l_handle = NULL;
+
+    return ESP_OK;
+
 }
 
 esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
@@ -310,6 +396,47 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
     return ESP_FAIL;
 }
 
+esp_err_t sim800l_stop(sim800l_handle_t sim800l_handle)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    /* Check if handle is NULL */
+    if (sim800l_handle == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Stop task */
+    vTaskDelete(sim800l_handle->sim800l_task_handle);
+
+    esp_err_t ret = ESP_FAIL;
+
+    /* Check PWRKEY */
+    if (sim800l_handle->config->sim800l_pwr_pin == GPIO_NUM_NC)
+    {
+        /* Module control by reset pin */
+        ret = gpio_set_level(sim800l_handle->config->sim800l_rst_pin, 0);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_set_level failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }   
+    else
+    {
+        /* Turn on module */
+        ret = gpio_set_level(sim800l_handle->config->sim800l_pwr_pin, 1);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_TAG, "gpio_set_level failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+
+    return ESP_OK;
+}
+
 esp_err_t sim800l_register_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler, void *sim800l_event_handler_arg)
 {
     ESP_LOGD(SIM800L_TAG, "%s", __func__);
@@ -364,7 +491,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
     if (response != NULL)
     {
         /* Send Queue */
-        if (xQueueSend(sim800l_handle->sim800l_queue_bridge_handle, command, timeout) != pdPASS)
+        if (xQueueSend(sim800l_handle->sim800l_queue_tx_handle, command, timeout) != pdPASS)
         {
             ESP_LOGE(SIM800L_TAG, "xQueueSend failed"); 
             return ESP_FAIL;
@@ -373,7 +500,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
         char respo_temp[MAX_PARAMS_SIZE] = {0};
 
         /* Wait for response */
-        if (xQueueReceive(sim800l_handle->sim800l_queue_out_handle, respo_temp, timeout) != pdPASS)
+        if (xQueueReceive(sim800l_handle->sim800l_queue_rx_handle, respo_temp, timeout) != pdPASS)
         {
             ESP_LOGE(SIM800L_TAG, "xQueueReceive failed"); 
             return ESP_FAIL;
@@ -444,8 +571,16 @@ static esp_err_t sim800l_uart_init(sim800l_handle_t sim800l_handle)
     }
 
     /* Config sim800l uart driver */
-    ret = uart_param_config (sim800l_handle->config->sim800l_uart_port,    /* UART port number */
-                            &sim800l_handle->config->sim800l_uart_config); /* UART config */
+    uart_config_t uart_config = {
+        .baud_rate = sim800l_handle->config->sim800l_uart_baudrate,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
+    };
+
+    /* Config sim800l uart driver */
+    ret = uart_param_config (sim800l_handle->config->sim800l_uart_port, &uart_config);
     if (ret != ESP_OK) 
     {
         ESP_LOGE(SIM800L_TAG, "UART param config failed: %s", esp_err_to_name(ret));
@@ -556,7 +691,7 @@ static void sim800l_bridge_task(void *args)
             // ESP_LOGI(SIM800L_TAG, "Received data: %s", data);
 
             /* Receive Queue */
-            if (xQueueReceive(sim800l_handle->sim800l_queue_bridge_handle, command_response, 0) == pdTRUE)
+            if (xQueueReceive(sim800l_handle->sim800l_queue_tx_handle, command_response, 0) == pdTRUE)
             {
                 // ESP_LOGI(SIM800L_TAG, "Received command: %s", command_response);
 
@@ -603,7 +738,7 @@ static void sim800l_bridge_task(void *args)
                     } while (token_respose != NULL);
                     
                     /* Send response */
-                    if (xQueueSend(sim800l_handle->sim800l_queue_out_handle, response, 0) != pdPASS)
+                    if (xQueueSend(sim800l_handle->sim800l_queue_rx_handle, response, 0) != pdPASS)
                     {
                         ESP_LOGE(SIM800L_TAG, "xQueueSend failed");
                     }

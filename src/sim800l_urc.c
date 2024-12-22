@@ -108,6 +108,22 @@ bool sim800l_urc_create_table(void)
     return true;
 }
    
+void sim800l_urc_delete_table(void)
+{
+    ESP_LOGD(SIM800L_URC_TAG, "%s", __func__);
+
+    for (int i = 0; i < TABLE_SIZE; i++)
+    {
+        sim800l_urc_t *urc = sim800l_urc_table[i];
+        while (urc)
+        {
+            sim800l_urc_t *aux = urc;
+            urc = urc->chain;
+            free(aux);
+        }
+        sim800l_urc_table[i] = NULL;
+    }
+}
 
 sim800l_urc_event_t sim800l_urc_interpret(const char *urc_name, char *urc_args[])
 {

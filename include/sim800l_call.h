@@ -27,14 +27,6 @@ typedef enum {
     SIM800L_CALL_ANSWER
 } sim800l_call_response_t;
 
-/*
- *     SIM800L call line identify
- */
-typedef enum {
-    SIM800L_CALL_LINE_ID_DIS = 0,
-    SIM800L_CALL_LINE_ID_EN
-} sim800l_call_line_id_t;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -44,7 +36,7 @@ extern "C" {
  */
 sim800l_ret_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *number);
 sim800l_ret_t sim800l_call_response(sim800l_handle_t sim800l_handle, sim800l_call_response_t call_response);
-sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_call_line_id_t call_line_id);
+sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, bool enable);
 
 #ifdef __cplusplus
 }

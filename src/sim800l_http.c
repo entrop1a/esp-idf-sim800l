@@ -258,11 +258,7 @@ sim800l_ret_t sim800l_http_get_param(sim800l_handle_t sim800l_handle, sim800l_ht
     
     char *temp = token + strlen("CID: ");
 
-    if (strncpy(param->cid, temp, strlen(temp)) == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Store temp Contype failed");
-        return SIM800L_RET_ERROR;
-    }
+    param->cid = (uint32_t)atoi(temp);
 
     /* Extract URL */
     token = strtok(NULL, "\r\n");
@@ -338,7 +334,7 @@ sim800l_ret_t sim800l_http_get_param(sim800l_handle_t sim800l_handle, sim800l_ht
     
     temp = token + strlen("REDIR: ");
 
-    param->redir = atoi(temp);
+    param->redir = (uint32_t)atoi(temp);
 
     /* Extract BREAK */
     token = strtok(NULL, "\r\n");
@@ -382,7 +378,7 @@ sim800l_ret_t sim800l_http_get_param(sim800l_handle_t sim800l_handle, sim800l_ht
     
     temp = token + strlen("TIMEOUT: ");
 
-    param->timeout = atoi(temp);
+    param->timeout = (uint32_t)atoi(temp);
     
     /* Extract CONTENT */
     token = strtok(NULL, "\r\n");
@@ -469,12 +465,8 @@ sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_
         ESP_LOGE(SIM800L_HTTP_TAG, "Extracting METHOD failed");
         return SIM800L_RET_ERROR;
     }
-    
-    if (strncpy(ret_action->method, token, strlen(token)) == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Store temp METHOD failed");
-        return SIM800L_RET_ERROR;
-    }
+
+    ret_action->method = atoi(token);
 
     /* Extract http code */
     token = strtok(NULL, ",");
@@ -494,11 +486,7 @@ sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_
         return SIM800L_RET_ERROR;
     }
     
-    if (strncpy(ret_action->content_length, token, strlen(token)) == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Store temp CONTENT failed");
-        return SIM800L_RET_ERROR;
-    }
+    ret_action->content_length = atoi(token);
 
     return SIM800L_RET_OK;
 }
@@ -517,7 +505,7 @@ sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_
     uint32_t command_length = 0;
 
     /* Command */
-    char *command = NULL;
+    uint8_t *command = NULL;
 
     if (start_addr == NULL || length == NULL)
     {
@@ -526,7 +514,7 @@ sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_
     }
 
     char start_addr_str[8] = {0};
-    if (snprintf(start_addr_str, sizeof(start_addr_str), "%d", start_addr) < 0)
+    if (snprintf(start_addr_str, sizeof(start_addr_str), "%lu", start_addr) < 0)
     {
         ESP_LOGE(SIM800L_HTTP_TAG, "Assembly of the command to be sent failed");
         return SIM800L_RET_ERROR_BUILD_COMMAND;

@@ -107,7 +107,7 @@ sim800l_ret_t sim800l_call_answer(sim800l_handle_t sim800l_handle, sim800l_call_
     return SIM800L_RET_OK;
 }
 
-sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800l_call_line_id_t call_line_id)
+sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, bool enable)
 {
     ESP_LOGD(SIM800L_CALL_TAG, "%s", __func__);
 
@@ -126,7 +126,7 @@ sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, sim800
     }
 
     /* Assembly of the command to be sent */
-    if (snprintf((char*)command, command_length, "%s%d\r\n", SIM800L_COMMAND_CALL_HANGUP, call_line_id) < 0)
+    if (snprintf((char*)command, command_length, "%s%d\r\n", SIM800L_COMMAND_CALL_HANGUP, enable) < 0)
     {
         ESP_LOGE(SIM800L_CALL_TAG, "Assembly of the command to be sent failed");
         free(command);

@@ -43,10 +43,10 @@ typedef struct
     char *ua;
     char *proip;
     char *proport;
-    uint32_t *redir;
+    uint32_t redir;
     char *break_;
     char *breakend;
-    uint32_t *timeout;
+    uint32_t timeout;
     char *content;
     char *userdata;
 } sim800l_http_param_t;

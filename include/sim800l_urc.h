@@ -43,6 +43,7 @@ sim800l_urc_event_t;
  *     SIM800L functions prototypes
  */
 bool sim800l_urc_create_table(void);
+void sim800l_urc_delete_table(void);
 sim800l_urc_event_t sim800l_urc_interpret(const char *urc_name, char *urc_args[]);
 
 #ifdef __cplusplus

@@ -12,7 +12,6 @@
  */
 #include "sim800l_core.h"
 #include "sim800l_sms.h"
-#include "sim800l_urc.h"
 #include <esp_log.h>
 #include <string.h>
 
@@ -317,7 +316,7 @@ sim800l_ret_t sim800l_sms_send_message(sim800l_handle_t sim800l_handle, const ch
         return SIM800L_RET_ERROR_BUILD_COMMAND;
     }
 
-    if (sim800l_out_data_event(sim800l_handle, (uint8_t *)end_byte_buffer, SIM800L_URC_EVENT_SMS_SEND, 60000) != ESP_OK)
+    if (sim800l_out_data_event(sim800l_handle, (uint8_t *)end_byte_buffer, SIM800L_EVENT_SMS_SEND, 60000) != ESP_OK)
     {
         ESP_LOGE(SIM800L_SMS_TAG, "sim800l_call_answer failed");
         return SIM800L_RET_ERROR_SEND_COMMAND;

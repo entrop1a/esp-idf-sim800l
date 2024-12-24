@@ -13,7 +13,6 @@
 #include "sim800l_core.h"
 #include "sim800l_http.h"
 #include "sim800l_common.h"
-#include "sim800l_urc.h"
 #include "sim800l_misc.h"
 #include <string.h>
 

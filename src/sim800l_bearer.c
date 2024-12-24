@@ -12,7 +12,6 @@
  */
 #include "sim800l_core.h"
 #include "sim800l_bearer.h"
-#include "sim800l_urc.h"
 #include "sim800l_misc.h"
 #include <string.h>
 

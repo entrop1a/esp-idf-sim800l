@@ -1,7 +1,7 @@
 /*
  * @file sim800l.c
  * @author Eduardo Gomes
- * @brief Source file for SIM800L driver
+ * @brief Soevente file for SIM800L driver
  * 
  * @copyright MIT
  *
@@ -12,7 +12,6 @@
  */
 #include "sim800l_core.h"
 #include "sim800l_common.h"
-#include "sim800l_urc.h"
 #include "sim800l_misc.h"
 #include <string.h>
 #include <driver/gpio.h>
@@ -40,11 +39,13 @@
 
 #define MAX_TOKEN_SIZE                  512
 
+#define TABLE_SIZE 8
+
 
 /*
  *     Tag
  */
-#define SIM800L_TAG "SIM800L"
+#define SIM800L_TAG "SIM800L CORE"
 
 /*
  *     Event base definition 
@@ -65,17 +66,42 @@ struct sim800l
 };
 
 /*
+ *     event struct
+ */
+typedef struct sim800l_event_hash_t {
+    const char *event_name;
+    sim800l_event_t (*sim800l_event_callback)(char **args);
+    struct sim800l_event_hash_t *chain;
+} sim800l_event_hash_t;
+
+/*
+ *     event table
+ */
+static sim800l_event_hash_t *sim800l_event_table[TABLE_SIZE];
+
+/*
  *     Private functions
  */
 static esp_err_t sim800l_uart_init(sim800l_handle_t sim800l_handle);
 static uint32_t sim800l_uart_send_data(sim800l_handle_t sim800l_handle, uint8_t* data, uint32_t data_len);
 static uint32_t sim800l_uart_recv_data(sim800l_handle_t sim800l_handle, uint8_t* data, uint32_t data_len, uint32_t timeout);
 static esp_err_t sim800l_post_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, void* data);
+static uint32_t event_hash(const char *event_name);
+static sim800l_event_t sim800l_event_interpreter(sim800l_handle_t sim800l_handle, const char *event_name, char *event_args[]);
 
 /*
  *     SIM800L task
  */
 static void sim800l_bridge_task(void* args);
+
+/*
+ *     SIM800L core callback functions
+ */
+sim800l_event_t sim800l_event_rdy(char **args);
+sim800l_event_t sim800l_event_cfun(char **args);
+sim800l_event_t sim800l_event_cpin(char **args);
+sim800l_event_t sim800l_event_call_ready(char **args);
+sim800l_event_t sim800l_event_sms_ready(char **args);
 
 /*
  *     Public functions development
@@ -221,13 +247,6 @@ esp_err_t sim800l_init(sim800l_handle_t* sim800l_handle, sim800l_config_t* sim80
         return ESP_ERR_NO_MEM;
     }
 
-    /* Create URC table */
-    if (sim800l_urc_create_table() == false)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_urc_create_table failed");
-        return ESP_FAIL;
-    }
-
     /* Assign temporary handle to main handle */
     *sim800l_handle = sim800l_handle_temp;
 
@@ -304,9 +323,6 @@ esp_err_t sim800l_deinit(sim800l_handle_t sim800l_handle)
     vQueueDelete(sim800l_handle->sim800l_queue_tx_handle);
     vQueueDelete(sim800l_handle->sim800l_queue_rx_handle);
 
-    /* Delete URC table */
-    sim800l_urc_delete_table();
-
     free(sim800l_handle);
     sim800l_handle = NULL;
 
@@ -364,6 +380,42 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
         }
     }
 
+    /* Register callback */
+    ret = sim800l_register_callback(SIM800L_EVENT_RDY_STR, sim800l_event_rdy);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_register_callback(SIM800L_EVENT_CFUN_STR, sim800l_event_cfun);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_register_callback(SIM800L_EVENT_CPIN_STR, sim800l_event_cpin);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_register_callback(SIM800L_EVENT_CALL_READY_STR, sim800l_event_call_ready);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_register_callback(SIM800L_EVENT_SMS_READY_STR, sim800l_event_sms_ready);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
     /* AT command test */
     if (sim800l_command_AT(sim800l_handle) != ESP_OK)
     {
@@ -373,27 +425,67 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
 
     /* Wait for SIM800L to be ready */
     BaseType_t events_start = xEventGroupWaitBits (sim800l_handle->sim800l_event_group_handle, 
-                                                    SIM800L_URC_EVENT_RDY |
-                                                    SIM800L_URC_EVENT_CFUN_FULL |
-                                                    SIM800L_URC_EVENT_CPIN_READY |
-                                                    SIM800L_URC_EVENT_CALL_READY |
-                                                    SIM800L_URC_EVENT_SMS_READY,
+                                                    SIM800L_EVENT_RDY |
+                                                    SIM800L_EVENT_CFUN_FULL |
+                                                    SIM800L_EVENT_CPIN_READY |
+                                                    SIM800L_EVENT_CALL_READY |
+                                                    SIM800L_EVENT_SMS_READY,
                                                     pdTRUE, 
                                                     pdTRUE, 
                                                     60000/portTICK_PERIOD_MS);
-    if(events_start == (SIM800L_URC_EVENT_RDY |
-                        SIM800L_URC_EVENT_CFUN_FULL |
-                        SIM800L_URC_EVENT_CPIN_READY |
-                        SIM800L_URC_EVENT_CALL_READY |
-                        SIM800L_URC_EVENT_SMS_READY ))
+    if(events_start == (SIM800L_EVENT_RDY |
+                        SIM800L_EVENT_CFUN_FULL |
+                        SIM800L_EVENT_CPIN_READY |
+                        SIM800L_EVENT_CALL_READY |
+                        SIM800L_EVENT_SMS_READY ))
     {
 
         ESP_LOGI(SIM800L_TAG, "SIM800L is ready");
-        return ESP_OK;
+        ret = ESP_OK;
+    }
+    else
+    {
+        ESP_LOGE(SIM800L_TAG, "SIM800L is not ready");
+        ret = ESP_FAIL;
     }
 
-    ESP_LOGE(SIM800L_TAG, "SIM800L is not ready");
-    return ESP_FAIL;
+    /* Unregister callback */
+    ret = sim800l_unregister_callback(SIM800L_EVENT_RDY_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ESP_LOGI(SIM800L_TAG, "Unregister callback");
+    ret = sim800l_unregister_callback(SIM800L_EVENT_CFUN_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ESP_LOGI(SIM800L_TAG, "Unregister callback");
+    ret = sim800l_unregister_callback(SIM800L_EVENT_CPIN_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ESP_LOGI(SIM800L_TAG, "Unregister callback");
+    ret = sim800l_unregister_callback(SIM800L_EVENT_CALL_READY_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ESP_LOGI(SIM800L_TAG, "Unregister callback");
+    ret = sim800l_unregister_callback(SIM800L_EVENT_SMS_READY_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ESP_LOGI(SIM800L_TAG, "Unregister callback");
+    return ret;
 }
 
 esp_err_t sim800l_stop(sim800l_handle_t sim800l_handle)
@@ -435,33 +527,6 @@ esp_err_t sim800l_stop(sim800l_handle_t sim800l_handle)
     }
 
     return ESP_OK;
-}
-
-esp_err_t sim800l_register_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler, void *sim800l_event_handler_arg)
-{
-    ESP_LOGD(SIM800L_TAG, "%s", __func__);
-
-    esp_err_t ret = ESP_OK;
-
-    /* Check if handle is NULL */
-    if (sim800l_handle == NULL)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    /* Register event handler */
-    ret = esp_event_handler_register (sim800l_handle->sim800l_event_loop_handle, 
-                                    (int32_t)SIM800L_EVENTS, 
-                                    sim800l_event_handler, 
-                                    sim800l_event_handler_arg);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "esp_event_handler_register failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    return ret;
 }
 
 esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, uint8_t *response, uint32_t timeout)
@@ -546,6 +611,134 @@ esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *comma
     }
 
     return ESP_FAIL;
+}
+
+esp_err_t sim800l_register_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler, void *sim800l_event_handler_arg)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    esp_err_t ret = ESP_OK;
+
+    /* Check if handle is NULL */
+    if (sim800l_handle == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Register event handler */
+    ret = esp_event_handler_register_with(sim800l_handle->sim800l_event_loop_handle,
+                                          SIM800L_EVENTS,
+                                          (int32_t)sim800l_event,
+                                          sim800l_event_handler,
+                                          sim800l_event_handler_arg);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "esp_event_handler_register failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    return ret;
+}
+
+esp_err_t sim800l_unregister_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    esp_err_t ret = ESP_OK;
+
+    /* Check if handle is NULL */
+    if (sim800l_handle == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Unregister event handler */
+    ret = esp_event_handler_unregister_with(sim800l_handle->sim800l_event_loop_handle,
+                                            SIM800L_EVENTS,
+                                            (int32_t)sim800l_event,
+                                            sim800l_event_handler);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "esp_event_handler_unregister failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t sim800l_register_callback(const char *event_name, sim800l_event_t (*sim800l_event_callback)(char **args))
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+    
+    ESP_LOGI(SIM800L_TAG, "Registering callback for event: %s", event_name);
+
+    /* Get event hash */
+    uint32_t index = event_hash(event_name);
+
+    ESP_LOGI(SIM800L_TAG, "event_name hash: %lu", index);
+
+    /* Create new event struct */
+    sim800l_event_hash_t *new_event = calloc(1, sizeof(sim800l_event_hash_t));
+    if (new_event == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "Memory allocation failed");
+        return ESP_ERR_NO_MEM;
+    }
+
+    /* Assembly of the new event struct */
+    new_event->event_name = strdup(event_name);
+    if (new_event->event_name == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "Memory allocation failed");
+        free(new_event);
+        return ESP_ERR_NO_MEM;
+    }
+
+    /* Assembly of the new event struct */
+    new_event->sim800l_event_callback = sim800l_event_callback;
+    new_event->chain = sim800l_event_table[index];
+    sim800l_event_table[index] = new_event;
+
+    return ESP_OK;
+}
+
+esp_err_t sim800l_unregister_callback(const char *event_name)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    ESP_LOGI(SIM800L_TAG, "event_name recv: %s", event_name);
+    
+    /* Get event hash */
+    uint32_t index = event_hash(event_name);
+
+    ESP_LOGI(SIM800L_TAG, "event_name hash: %lu", index);
+
+    /* Get event struct */
+    sim800l_event_hash_t *event = sim800l_event_table[index];
+
+    while (event)
+    {
+        /*Check if event name is equal to event_name*/
+        if (strstr(event->event_name, event_name) != NULL)
+        {
+            if (event->chain != NULL)
+            {
+                sim800l_event_table[index] = event->chain;
+            }
+            
+            /* Free event struct */
+            free(event);
+            event = NULL;
+
+            return ESP_OK;
+        }
+
+        event = event->chain;
+    }
+
+    return ESP_OK;
 }
 
 /*
@@ -643,12 +836,12 @@ static esp_err_t sim800l_post_event(sim800l_handle_t sim800l_handle, sim800l_eve
     };
 
     /* Post event */
-    ret = esp_event_post_to (sim800l_handle->sim800l_event_loop_handle, /* Event loop handle */
-                                                SIM800L_EVENTS,                            /* Events base */
-                                                sim800l_event,                             /* Event */
-                                                &sim800l_event_data,                       /* Event data */
-                                                sizeof(sim800l_event_data),                /* Event data size */
-                                                portMAX_DELAY);                            /* Timeout */
+    ret = esp_event_post_to(sim800l_handle->sim800l_event_loop_handle, /* Event loop handle */
+                            SIM800L_EVENTS,                            /* Events base */
+                            sim800l_event,                             /* Event */
+                            &sim800l_event_data,                       /* Event data */
+                            sizeof(sim800l_event_data),                /* Event data size */
+                            portMAX_DELAY);                            /* Timeout */
     if (ret != ESP_OK)
     {
         ESP_LOGE(SIM800L_TAG, "esp_event_post_to failed: %s", esp_err_to_name(ret));
@@ -664,6 +857,59 @@ static esp_err_t sim800l_post_event(sim800l_handle_t sim800l_handle, sim800l_eve
     }
 
     return ret;
+}
+
+static sim800l_event_t sim800l_event_interpreter(sim800l_handle_t sim800l_handle, const char *event_name, char *event_args[])
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    /* Check if event_name is NULL */
+    if (event_name == NULL)
+    {
+        ESP_LOGE(SIM800L_TAG, "event_name is NULL");
+        return -1;
+    }
+
+    /* Get event hash */
+    uint32_t hash = event_hash(event_name);
+
+    /* Get event struct related to hash */
+    sim800l_event_hash_t *event = sim800l_event_table[hash];
+
+    while (event)
+    {
+        /*Check if event name is equal to event_name*/
+        if (strstr(event->event_name, event_name) != NULL)
+        {
+            /* event callback */
+            if (event->sim800l_event_callback != NULL)
+            {   
+                sim800l_event_t ret = event->sim800l_event_callback((char**)event_args);
+
+                /* Set eventgroup */
+                xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, ret);
+
+                /* Post event with args */
+                sim800l_post_event(sim800l_handle, ret, event_args);
+
+                return ret;
+            }
+        }
+
+        /* Get next event struct */
+        event = event->chain;
+    }
+
+    return -1;
+}
+
+static uint32_t event_hash(const char *event_name)
+{
+    uint32_t event_hash = 10037;
+    while (*event_name) {
+        event_hash = (event_hash*31) + *event_name++;
+    }
+    return event_hash%TABLE_SIZE;
 }
 
 /*
@@ -746,27 +992,27 @@ static void sim800l_bridge_task(void *args)
             }
 
             /* Extract tokens */
-            char **urc_args = (char **)calloc(5, sizeof(char *));
+            char **event_args = (char **)calloc(5, sizeof(char *));
             char *token = strtok((char*)data, "\r\n");
             do
             {
-                // ESP_LOGI(SIM800L_TAG, "Token URC: %s", token);
-                memset(urc_args, 0, sizeof(char *) * 5);
-                char urc[25] = {0};
+                // ESP_LOGI(SIM800L_TAG, "Token event: %s", token);
+                memset(event_args, 0, sizeof(char *) * 5);
+                char event[25] = {0};
 
-                /* Check if the token is a URC in format: +<token>:*/
+                /* Check if the token is a event in format: +<token>:*/
                 if (token[0] == '+')
                 {
-                    /* Extract URC (+<urc>:args) */
+                    /* Extract event (+<event>:args) */
                     token = strtok(token, ":");
-                    strncpy(urc, token, strlen(token));
+                    strncpy(event, token, strlen(token));
 
                     int i = 0;
                     token = strtok(NULL, ",");
                     do
                     {
                         /* Extract args */
-                        urc_args[i] = strdup(token);
+                        event_args[i] = strdup(token);
                         
                         /* Get next token */
                         token = strtok(NULL, ",");
@@ -775,27 +1021,74 @@ static void sim800l_bridge_task(void *args)
                 }
                 else
                 {
-                    /* Extract simple URC */
-                    strncpy(urc, token, strlen(token));
+                    /* Extract simple event */
+                    strncpy(event, token, strlen(token));
                 }
 
-                /* Interpret URC */
-                sim800l_urc_event_t urc_event = sim800l_urc_interpret((const char *)urc, urc_args);
-                if (urc_event != -1)
-                {
-                    /* Set URC event */
-                    xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, urc_event);
-                }
+                /* Interpret event */
+                sim800l_event_interpreter(sim800l_handle, (const char *)event, event_args);
                 
                 /* Get next token */
                 token = strtok(NULL, "\r\n");
             } while (token != NULL);
 
             
-            free(urc_args);
-            urc_args = NULL;
+            free(event_args);
+            event_args = NULL;
         }
 
         vTaskDelay(50 / portTICK_PERIOD_MS);
     }
+}
+
+/*
+ *     SIM800L core callback functions 
+ */
+sim800l_event_t sim800l_event_rdy(char **args)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    return SIM800L_EVENT_RDY;
+}
+
+sim800l_event_t sim800l_event_cfun(char **args)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    if (strstr(args[0], "0") != NULL)
+    {
+        return SIM800L_EVENT_CFUN_MINIMUM;
+    }
+    if (strstr(args[0], "1") != NULL)
+    {
+        return SIM800L_EVENT_CFUN_FULL;
+    }
+
+    return -1;
+}
+
+sim800l_event_t sim800l_event_cpin(char **args)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    if (strstr(args[0], "READY") != NULL)
+    {
+        return SIM800L_EVENT_CPIN_READY;
+    }
+
+    return -1;
+}
+
+sim800l_event_t sim800l_event_call_ready(char **args)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    return SIM800L_EVENT_CALL_READY;
+}
+
+sim800l_event_t sim800l_event_sms_ready(char **args)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    return SIM800L_EVENT_SMS_READY;
 }

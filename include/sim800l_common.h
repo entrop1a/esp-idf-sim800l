@@ -128,7 +128,7 @@ typedef int sim800l_ret_t;
  * This command is used to set the line identification presentation.
  * 
  */
-#define SIM800L_COMMAND_LINE_ID "AT+CLIP="
+#define SIM800L_COMMAND_CALL_LINE_ID "AT+CLIP="
 
 /*
  * SIM800L - SMS mode.

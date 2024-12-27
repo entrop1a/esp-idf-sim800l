@@ -48,15 +48,19 @@ typedef struct
 
 typedef enum 
 {
-    SIM800L_EVENT_ANY_ID        = ESP_EVENT_ANY_ID,
-    SIM800L_EVENT_RDY           = 1 << 0,
-    SIM800L_EVENT_CFUN_MINIMUM  = 1 << 1,
-    SIM800L_EVENT_CFUN_FULL     = 1 << 2,
-    SIM800L_EVENT_CFUN_DISABLE  = 1 << 3,
-    SIM800L_EVENT_CPIN_READY    = 1 << 4,
-    SIM800L_EVENT_CALL_READY    = 1 << 5,
-    SIM800L_EVENT_SMS_READY     = 1 << 6,
-    SIM800L_EVENT_SMS_SEND      = 1 << 7
+    SIM800L_EVENT_ANY_ID            = ESP_EVENT_ANY_ID,
+    SIM800L_EVENT_RDY               = BIT0,
+    SIM800L_EVENT_CFUN_MINIMUM      = BIT1,
+    SIM800L_EVENT_CFUN_FULL         = BIT2,
+    SIM800L_EVENT_CFUN_DISABLE      = BIT3,
+    SIM800L_EVENT_CPIN_READY        = BIT4,
+    SIM800L_EVENT_CALL_READY        = BIT5,
+    SIM800L_EVENT_SMS_READY         = BIT6,
+    SIM800L_EVENT_SMS_SEND          = BIT7,
+    SIM800L_EVENT_SMS_RECV          = BIT8,
+    SIM800L_EVENT_CALL_RING         = BIT9,
+    SIM800L_EVENT_CALL_IDENTIFY     = BIT10,
+    SIM800L_EVENT_CALL_NO_CARRIER   = BIT11
 }
 sim800l_event_t;
 
@@ -71,6 +75,12 @@ typedef struct
     void *ptr;
 }sim800l_event_data_t;
 
+typedef struct 
+{
+    char number[16];
+    uint32_t type;
+} sim800l_call_identify_t;
+
 /*
  *     SIM800L functions prototypes
  */
@@ -83,7 +93,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
 esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, EventBits_t event, uint32_t timeout);
 esp_err_t sim800l_register_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler, void *sim800l_event_handler_arg);
 esp_err_t sim800l_unregister_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler);
-esp_err_t sim800l_register_callback(const char *event_name, sim800l_event_t (*sim800l_event_callback)(char **args));
+esp_err_t sim800l_register_callback(const char *event_name, sim800l_event_t (*sim800l_event_callback)(char **input_args, void *output_data));
 esp_err_t sim800l_unregister_callback(const char *event_name);
 
 

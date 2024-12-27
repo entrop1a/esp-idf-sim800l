@@ -34,6 +34,7 @@ extern "C" {
 /*
  *     SIM800L functions prototypes
  */
+sim800l_ret_t sim800l_call_switch(sim800l_handle_t sim800l_handle, bool enable);
 sim800l_ret_t sim800l_call_make_call(sim800l_handle_t sim800l_handle, const char *number);
 sim800l_ret_t sim800l_call_response(sim800l_handle_t sim800l_handle, sim800l_call_response_t call_response);
 sim800l_ret_t sim800l_call_line_identify(sim800l_handle_t sim800l_handle, bool enable);

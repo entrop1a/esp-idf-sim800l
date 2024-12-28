@@ -60,7 +60,8 @@ typedef enum
     SIM800L_EVENT_SMS_RECV          = BIT8,
     SIM800L_EVENT_CALL_RING         = BIT9,
     SIM800L_EVENT_CALL_IDENTIFY     = BIT10,
-    SIM800L_EVENT_CALL_NO_CARRIER   = BIT11
+    SIM800L_EVENT_CALL_NO_CARRIER   = BIT11,
+    SIM800L_EVENT_SMS_NEW_MASSAGE   = BIT12
 }
 sim800l_event_t;
 
@@ -90,7 +91,7 @@ esp_err_t sim800l_deinit(sim800l_handle_t sim800l_handle);
 esp_err_t sim800l_start(sim800l_handle_t sim800l_handle);
 esp_err_t sim800l_stop(sim800l_handle_t sim800l_handle);
 esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, uint8_t *response, uint32_t timeout);
-esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, EventBits_t event, uint32_t timeout);
+esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, sim800l_event_t event, uint32_t timeout);
 esp_err_t sim800l_register_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler, void *sim800l_event_handler_arg);
 esp_err_t sim800l_unregister_event(sim800l_handle_t sim800l_handle, sim800l_event_t sim800l_event, esp_event_handler_t sim800l_event_handler);
 esp_err_t sim800l_register_callback(const char *event_name, sim800l_event_t (*sim800l_event_callback)(char **input_args, void *output_data));

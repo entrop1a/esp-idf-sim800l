@@ -54,6 +54,7 @@ extern "C" {
 /*
  *     SIM800L functions prototypes
  */
+sim800l_ret_t sim800l_sms_switch(sim800l_handle_t sim800l_handle, bool enable);
 sim800l_ret_t sim800l_sms_set_mode(sim800l_handle_t sim800l_handle, sim800l_sms_mode_t sms_mode);
 sim800l_sms_mode_t sim800l_sms_get_mode(sim800l_handle_t sim800l_handle);
 sim800l_ret_t sim800l_sms_read_message(sim800l_handle_t sim800l_handle, uint32_t index, sim800l_sms_message_t *message);

@@ -433,7 +433,7 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
                                                     pdTRUE, 
                                                     pdTRUE, 
                                                     60000/portTICK_PERIOD_MS);
-    if(events_start == (SIM800L_EVENT_RDY |
+    if(events_start & (SIM800L_EVENT_RDY |
                         SIM800L_EVENT_CFUN_FULL |
                         SIM800L_EVENT_CPIN_READY |
                         SIM800L_EVENT_CALL_READY |
@@ -580,7 +580,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
     return ESP_OK;
 }
 
-esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, EventBits_t event, uint32_t timeout)
+esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *command, sim800l_event_t event, uint32_t timeout)
 {
     ESP_LOGD(SIM800L_TAG, "%s", __func__);
 
@@ -604,8 +604,8 @@ esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *comma
     }
 
     /* Wait for response */
-    BaseType_t events_ret = xEventGroupWaitBits(sim800l_handle->sim800l_event_group_handle, event, pdTRUE, pdTRUE, timeout);
-    if (events_ret == event)
+    EventBits_t events_ret = xEventGroupWaitBits(sim800l_handle->sim800l_event_group_handle, (uint32_t)event, pdTRUE, pdTRUE, timeout/portTICK_PERIOD_MS);
+    if (events_ret & event)
     {
         return ESP_OK;
     }
@@ -906,8 +906,6 @@ static sim800l_event_t sim800l_event_interpreter(sim800l_handle_t sim800l_handle
 
                 sim800l_event_t ret = event->sim800l_event_callback((char**)event_args, &output);
 
-                ESP_LOGI(SIM800L_TAG, "SIM800L EVENT: %s | ret: %d", event_name, ret);
-
                 /* Set eventgroup */
                 xEventGroupSetBits(sim800l_handle->sim800l_event_group_handle, ret);
 
@@ -960,13 +958,9 @@ static void sim800l_bridge_task(void *args)
         uint8_t data[MAX_PARAMS_SIZE] = {0};
         if (sim800l_uart_recv_data(sim800l_handle, data, sizeof(data), MAX_PARAMS_SIZE) > 0)
         {
-            ESP_LOGI(SIM800L_TAG, "Received data: %s", data);
-
             /* Receive Queue */
             if (xQueueReceive(sim800l_handle->sim800l_queue_tx_handle, command_response, 0) == pdTRUE)
             {
-                // ESP_LOGI(SIM800L_TAG, "Received command: %s", command_response);
-
                 /* Data temp */
                 uint8_t data_temp[MAX_PARAMS_SIZE] = {0};
                 strncpy((char *)data_temp, (const char *)data, MAX_PARAMS_SIZE);
@@ -981,7 +975,6 @@ static void sim800l_bridge_task(void *args)
                     token_respose = strtok(NULL, "\r\n");
                     do
                     {
-                        // ESP_LOGI(SIM800L_TAG, "Token response: %s", token_respose);
                         /* Check if token starts with '+' */
                         if (token_respose[0] == '+')
                         {
@@ -1032,7 +1025,6 @@ static void sim800l_bridge_task(void *args)
                     /* Extract event (+<event>:args) */
                     token = strtok(token, ":");
                     strncpy(event, token, strlen(token));
-                    // ESP_LOGI(SIM800L_TAG, "Event: %s", event);
 
                     int i = 0;
                     token = strtok(NULL, ",");
@@ -1050,7 +1042,6 @@ static void sim800l_bridge_task(void *args)
                 {
                     /* Extract simple event */
                     strncpy(event, token, strlen(token));
-                    // ESP_LOGI(SIM800L_TAG, "Event: %s", event);
                 }
 
                 /* Interpret event */

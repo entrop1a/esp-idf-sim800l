@@ -34,7 +34,6 @@ typedef int sim800l_ret_t;
 #define SIM800L_EVENT_CPIN_STR "+CPIN"
 #define SIM800L_EVENT_CALL_READY_STR "Call Ready"
 #define SIM800L_EVENT_SMS_READY_STR "SMS Ready"
-#define SIM800L_EVENT_SMS_SEND_STR "+CMGS"
 
 /*
  * SIM800L - Test command

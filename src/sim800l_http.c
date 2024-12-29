@@ -18,15 +18,42 @@
 
 #define SIM800L_HTTP_TAG "SIM800L HTTP"
 
+#define SIM800L_EVENT_HTTP_ACTION_STR "+HTTPACTION"
+
+sim800l_event_t sim800l_event_http_action(char **input_args, void *output_data);
+
 sim800l_ret_t sim800l_http_switch(sim800l_handle_t sim800l_handle, bool enable)
 {
     ESP_LOGD(SIM800L_HTTP_TAG, "%s", __func__);
 
-    char command[16] = SIM800L_COMMAND_HTTP_INIT;
+    char command[16] = {0};
 
-    if (enable == false)
+    if (enable)
     {
-        memset(command, 0, sizeof(command));
+        /* Register callback */
+        if (sim800l_register_callback(SIM800L_EVENT_HTTP_ACTION_STR, sim800l_event_http_action) != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_HTTP_TAG, "sim800l_register_callback failed");
+            return SIM800L_RET_ERROR;
+        }
+
+        /* Assembly of the command to be sent */
+        if (strncpy(command, SIM800L_COMMAND_HTTP_INIT, strlen(SIM800L_COMMAND_HTTP_INIT)) == NULL)
+        {
+            ESP_LOGE(SIM800L_HTTP_TAG, "strncpy failed");
+            return SIM800L_RET_ERROR_BUILD_COMMAND;
+        }
+    }
+    else
+    {
+        /* Unregister callback */
+        if (sim800l_unregister_callback(SIM800L_EVENT_HTTP_ACTION_STR) != ESP_OK)
+        {
+            ESP_LOGE(SIM800L_HTTP_TAG, "sim800l_unregister_callback failed");
+            return SIM800L_RET_ERROR;
+        }
+
+        /* Assembly of the command to be sent */
         if (strncpy(command, SIM800L_COMMAND_HTTP_TERMINATE, strlen(SIM800L_COMMAND_HTTP_TERMINATE)) == NULL)
         {
             ESP_LOGE(SIM800L_HTTP_TAG, "strncpy failed");
@@ -38,9 +65,10 @@ sim800l_ret_t sim800l_http_switch(sim800l_handle_t sim800l_handle, bool enable)
     char response[10] = {0};
 
     /* Send AT command */
-    if (sim800l_out_data(sim800l_handle, (uint8_t *)command, (uint8_t *)response, 1000) != ESP_OK)
+    esp_err_t ret = sim800l_out_data(sim800l_handle, (uint8_t *)command, (uint8_t *)response, 2000);
+    if (ret != ESP_OK)
     {
-        ESP_LOGE(SIM800L_HTTP_TAG, "sim800l_out_data failed");
+        ESP_LOGE(SIM800L_HTTP_TAG, "sim800l_out_data failed: %s", esp_err_to_name(ret));
         return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
@@ -414,7 +442,7 @@ sim800l_ret_t sim800l_http_get_param(sim800l_handle_t sim800l_handle, sim800l_ht
     return SIM800L_RET_OK;
 }
 
-sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_method_t method, sim800l_http_action_t *ret_action)
+sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_method_t method)
 {
     ESP_LOGD(SIM800L_HTTP_TAG, "%s", __func__);
 
@@ -457,36 +485,6 @@ sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_
         return SIM800L_RET_ERROR;
     }
 
-    /* Extract method */
-    char *token = strtok(response, ",");
-    if (token == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Extracting METHOD failed");
-        return SIM800L_RET_ERROR;
-    }
-
-    ret_action->method = atoi(token);
-
-    /* Extract http code */
-    token = strtok(NULL, ",");
-    if (token == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Extracting CODE failed");
-        return SIM800L_RET_ERROR;
-    }
-    
-    ret_action->http_code = atoi(token);
-
-    /* Extract content length */
-    token = strtok(NULL, "\r\n");
-    if (token == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Extracting CONTENT failed");
-        return SIM800L_RET_ERROR;
-    }
-    
-    ret_action->content_length = atoi(token);
-
     return SIM800L_RET_OK;
 }
 
@@ -497,18 +495,6 @@ sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_
     if (buffer == NULL)
     {
         ESP_LOGE(SIM800L_HTTP_TAG, "Buffer is NULL");
-        return SIM800L_RET_INVALID_ARG;
-    }
-
-    /* Command length */
-    uint32_t command_length = 0;
-
-    /* Command */
-    uint8_t *command = NULL;
-
-    if (start_addr == NULL || length == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "start_addr or length is NULL");
         return SIM800L_RET_INVALID_ARG;
     }
 
@@ -526,15 +512,17 @@ sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_
         return SIM800L_RET_ERROR_BUILD_COMMAND;
     }
 
-    command_length = strlen(SIM800L_COMMAND_HTTP_READ) + 2 * sizeof(char) + strlen(start_addr_str) + strlen(length_str) + strlen("\r\n") + 1; /* cmd=d,d\r\n */
+    uint32_t command_length = strlen(SIM800L_COMMAND_HTTP_READ) + 2 * sizeof(char) + strlen(start_addr_str) + strlen(length_str) + strlen("\r\n") + 1; /* cmd=d,d\r\n */
 
     /* Allocate dinamic memory */
-    command = (uint8_t *)calloc(command_length, sizeof(uint8_t));
+    uint8_t *command = calloc(command_length, sizeof(uint8_t));
     if (command == NULL)
     {
         ESP_LOGE(SIM800L_HTTP_TAG, "Memory allocation failed");
         return SIM800L_RET_ERROR_MEM;
     }
+
+    ESP_LOGI(SIM800L_HTTP_TAG, "start_addr_str: %s", start_addr_str);
 
     /* Assembly of the command to be sent */
     if (snprintf((char *)command, command_length, "%s=%s,%s\r\n", SIM800L_COMMAND_HTTP_READ, start_addr_str, length_str) < 0)
@@ -545,20 +533,13 @@ sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_
     }
 
     /* Response */
-    int skip_response = strlen(length_str) + strlen("\r\n") + 1;
-    char *response = (char *)calloc(length + skip_response, sizeof(char));
-    if (response == NULL)
-    {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Memory allocation failed");
-        return SIM800L_RET_ERROR_MEM;
-    }
+    char response[512] = {0};
 
     /* Send command */
     if (sim800l_out_data(sim800l_handle, command, (uint8_t *)response, 1000) != ESP_OK)
     {
         ESP_LOGE(SIM800L_HTTP_TAG, "Command sending failed");
         free(command);
-        free(response);
         return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
@@ -568,17 +549,50 @@ sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_
     if (strncmp(response, "ERROR", strlen("ERROR")) == 0)
     {
         ESP_LOGE(SIM800L_HTTP_TAG, "Command sending failed");
-        free(response);
         return SIM800L_RET_ERROR_SEND_COMMAND;
     }
 
-    /* Copy response to buffer */
-    if (strncpy((char *)buffer, response + skip_response, length) == NULL)
+    char *response_start = strnstr(response, "\r\n", strlen(response)) + 1;
+    char *response_end = strnstr(response_start, "OK", strlen(response_start));
+    size_t response_length = response_end - response_start;
+    char buffer_temp[response_length + 1];
+    memset(buffer_temp, 0, response_length + 1);
+    if (strncpy(buffer_temp, response_start, response_length) == NULL)
     {
-        ESP_LOGE(SIM800L_HTTP_TAG, "Copy response to buffer failed");
-        free(response);
+        ESP_LOGE(SIM800L_HTTP_TAG, "strncpy failed");
+        return SIM800L_RET_ERROR;
+    }
+    buffer[response_length] = '\0';
+
+    ESP_LOGI(SIM800L_HTTP_TAG, "Response: %s", buffer_temp);
+
+    if (strncpy((char *)buffer, buffer_temp, strlen(buffer_temp)) == NULL)
+    {
+        ESP_LOGE(SIM800L_HTTP_TAG, "strncpy failed");
         return SIM800L_RET_ERROR;
     }
 
     return SIM800L_RET_OK;
+}
+
+
+/*
+ *     SIM800L call event functions
+ */
+sim800l_event_t sim800l_event_http_action(char **input_args, void *output_data)
+{
+    ESP_LOGD(SIM800L_HTTP_TAG, "%s", __func__);
+
+    sim800l_http_action_t *action = (sim800l_http_action_t *)output_data;
+
+    /* Get Method */
+    action->method = atoi(input_args[0]);
+
+    /* Get http code */
+    action->http_code = atoi(input_args[1]);
+
+    /* Get content length */
+    action->content_length = atoi(input_args[2]);
+
+    return SIM800L_EVENT_HTTP_ACTION;
 }

@@ -27,10 +27,10 @@
 sim800l_ret_t sim800l_bearer_switch(sim800l_handle_t sim800l_handle, bool bearer_state)
 {
     ESP_LOGD(SIM800L_BEARER_TAG, "%s", __func__);
-
+    
     /* Get command length */
     uint32_t command_length = strlen(SIM800L_COMMAND_BEARER) + 4*sizeof(char) + strlen("\r\n") + 1; /* cmd=d,d\r\n */
-
+    
     /* Allocate dinamic memory */
     uint8_t *command = calloc(command_length, sizeof(uint8_t));
     if (command == NULL)
@@ -38,7 +38,7 @@ sim800l_ret_t sim800l_bearer_switch(sim800l_handle_t sim800l_handle, bool bearer
         ESP_LOGE(SIM800L_BEARER_TAG, "Memory allocation failed");
         return SIM800L_RET_ERROR_MEM;
     }
-
+    
     /* Assembly of the command to be sent */
     if (snprintf((char*)command, command_length, "%s=%d,1\r\n", SIM800L_COMMAND_BEARER, bearer_state) < 0)
     {
@@ -47,26 +47,17 @@ sim800l_ret_t sim800l_bearer_switch(sim800l_handle_t sim800l_handle, bool bearer
         return SIM800L_RET_ERROR_BUILD_COMMAND;
     }
 
-    /* Response */
-    char response[10] = {0};
-    
     /* Send AT command */
-    if (sim800l_out_data(sim800l_handle, command, (uint8_t *)response, 85000) != ESP_OK)
+    esp_err_t ret = sim800l_out_data_event(sim800l_handle, command, SIM800L_EVENT_OK, 85000);
+    if (ret != ESP_OK)
     {
-        ESP_LOGE(SIM800L_BEARER_TAG, "sim800l_call_answer failed");
+        ESP_LOGE(SIM800L_BEARER_TAG, "sim800l_out_data failed: %s", esp_err_to_name(ret));
         free(command);
         return SIM800L_RET_ERROR_SEND_COMMAND;
     }
-
+    
     free(command);
-
-    /* Check response */
-    if (strnstr((char *)response, "OK", sizeof(response)) == NULL)
-    {
-        ESP_LOGE(SIM800L_BEARER_TAG, "sim800l_call_answer failed");
-        return SIM800L_RET_ERROR;
-    }
-
+    
     return SIM800L_RET_OK;
 }
 

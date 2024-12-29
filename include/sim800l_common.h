@@ -26,16 +26,6 @@ typedef int sim800l_ret_t;
 #define SIM800L_RET_INVALID_ARG 4
 
 /*
- *     EVENT names
- */
-
-#define SIM800L_EVENT_RDY_STR "RDY"
-#define SIM800L_EVENT_CFUN_STR "+CFUN"
-#define SIM800L_EVENT_CPIN_STR "+CPIN"
-#define SIM800L_EVENT_CALL_READY_STR "Call Ready"
-#define SIM800L_EVENT_SMS_READY_STR "SMS Ready"
-
-/*
  * SIM800L - Test command
  *
  * This command is used to test the SIM800L module.

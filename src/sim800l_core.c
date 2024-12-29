@@ -43,6 +43,17 @@
 
 
 /*
+ *     EVENT names
+ */
+#define SIM800L_EVENT_OK_STR "OK"
+#define SIM800L_EVENT_ERROR_STR "ERROR"
+#define SIM800L_EVENT_RDY_STR "RDY"
+#define SIM800L_EVENT_CFUN_STR "+CFUN"
+#define SIM800L_EVENT_CPIN_STR "+CPIN"
+#define SIM800L_EVENT_CALL_READY_STR "Call Ready"
+#define SIM800L_EVENT_SMS_READY_STR "SMS Ready"
+
+/*
  *     Tag
  */
 #define SIM800L_TAG "SIM800L CORE"
@@ -97,6 +108,8 @@ static void sim800l_bridge_task(void* args);
 /*
  *     SIM800L core callback functions
  */
+sim800l_event_t sim800l_event_ok(char **input_args, void *output_data);
+sim800l_event_t sim800l_event_error(char **input_args, void *output_data);
 sim800l_event_t sim800l_event_rdy(char **input_args, void *output_data);
 sim800l_event_t sim800l_event_cfun(char **input_args, void *output_data);
 sim800l_event_t sim800l_event_cpin(char **input_args, void *output_data);
@@ -378,9 +391,23 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
             ESP_LOGE(SIM800L_TAG, "gpio_set_level failed: %s", esp_err_to_name(ret));
             return ret;
         }
-    }
+    }   
 
     /* Register callback */
+    ret = sim800l_register_callback(SIM800L_EVENT_OK_STR, sim800l_event_ok);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_register_callback(SIM800L_EVENT_ERROR_STR, sim800l_event_error);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
     ret = sim800l_register_callback(SIM800L_EVENT_RDY_STR, sim800l_event_rdy);
     if (ret != ESP_OK)
     {
@@ -441,51 +468,10 @@ esp_err_t sim800l_start(sim800l_handle_t sim800l_handle)
     {
 
         ESP_LOGI(SIM800L_TAG, "SIM800L is ready");
-        ret = ESP_OK;
+        return ESP_OK;
     }
-    else
-    {
-        ESP_LOGE(SIM800L_TAG, "SIM800L is not ready");
-        ret = ESP_FAIL;
-    }
-
-    /* Unregister callback */
-    ret = sim800l_unregister_callback(SIM800L_EVENT_RDY_STR);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = sim800l_unregister_callback(SIM800L_EVENT_CFUN_STR);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = sim800l_unregister_callback(SIM800L_EVENT_CPIN_STR);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = sim800l_unregister_callback(SIM800L_EVENT_CALL_READY_STR);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = sim800l_unregister_callback(SIM800L_EVENT_SMS_READY_STR);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    return ret;
+    
+    return ESP_FAIL;
 }
 
 esp_err_t sim800l_stop(sim800l_handle_t sim800l_handle)
@@ -526,6 +512,56 @@ esp_err_t sim800l_stop(sim800l_handle_t sim800l_handle)
         }
     }
 
+    /* Unregister callback */
+    ret = sim800l_unregister_callback(SIM800L_EVENT_OK_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_unregister_callback(SIM800L_EVENT_ERROR_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_unregister_callback(SIM800L_EVENT_RDY_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_unregister_callback(SIM800L_EVENT_CFUN_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_unregister_callback(SIM800L_EVENT_CPIN_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_unregister_callback(SIM800L_EVENT_CALL_READY_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = sim800l_unregister_callback(SIM800L_EVENT_SMS_READY_STR);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(SIM800L_TAG, "sim800l_register_callback failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
     return ESP_OK;
 }
 
@@ -539,7 +575,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
         ESP_LOGE(SIM800L_TAG, "sim800l_handle is NULL");
         return ESP_ERR_INVALID_ARG;
     }
-
+    
     /* Check if data_set is NULL */
     if (command != NULL)
     {
@@ -561,7 +597,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
             ESP_LOGE(SIM800L_TAG, "xQueueSend failed"); 
             return ESP_FAIL;
         }
-
+        ESP_LOGI(SIM800L_TAG, "Command sent: %s", command);
         char respo_temp[MAX_PARAMS_SIZE] = {0};
 
         /* Wait for response */
@@ -601,6 +637,13 @@ esp_err_t sim800l_out_data_event(sim800l_handle_t sim800l_handle, uint8_t *comma
 
             return ESP_FAIL;
         }
+    }
+
+    /* Check if event group is void */
+    EventBits_t event_prev = xEventGroupGetBits(sim800l_handle->sim800l_event_group_handle);
+    if (event_prev != 0)
+    {
+        xEventGroupClearBits(sim800l_handle->sim800l_event_group_handle, event_prev);
     }
 
     /* Wait for response */
@@ -971,8 +1014,10 @@ static void sim800l_bridge_task(void *args)
                 /* Check if the token is a command*/
                 if (strnstr((const char *)command_response, (const char *)token_respose, strlen((const char *)command_response)) != NULL)
                 {
+                    ESP_LOGI(SIM800L_TAG, "Received command checked: %s", token_respose);
                     /* Extract response */
                     token_respose = strtok(NULL, "\r\n");
+                    if (token_respose == NULL) ESP_LOGI(SIM800L_TAG, "Vai dar errado");
                     do
                     {
                         /* Check if token starts with '+' */
@@ -1063,6 +1108,20 @@ static void sim800l_bridge_task(void *args)
 /*
  *     SIM800L core callback functions 
  */
+sim800l_event_t sim800l_event_ok(char **input_args, void *output_data)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    return SIM800L_EVENT_OK;
+}
+
+sim800l_event_t sim800l_event_error(char **input_args, void *output_data)
+{
+    ESP_LOGD(SIM800L_TAG, "%s", __func__);
+
+    return SIM800L_EVENT_ERROR;
+}
+
 sim800l_event_t sim800l_event_rdy(char **input_args, void *output_data)
 {
     ESP_LOGD(SIM800L_TAG, "%s", __func__);

@@ -73,5 +73,5 @@ typedef struct
 sim800l_ret_t sim800l_http_switch(sim800l_handle_t sim800l_handle, bool enable);
 sim800l_ret_t sim800l_http_set_param(sim800l_handle_t sim800l_handle, sim800l_http_param_tag_t param_tag, const char *value);
 sim800l_ret_t sim800l_http_get_param(sim800l_handle_t sim800l_handle, sim800l_http_param_t *param);
-sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_method_t method, sim800l_http_action_t *ret_action);
+sim800l_ret_t sim800l_http_action(sim800l_handle_t sim800l_handle, sim800l_http_method_t method);
 sim800l_ret_t sim800l_http_read(sim800l_handle_t sim800l_handle, uint32_t start_addr, size_t length, uint8_t *buffer);

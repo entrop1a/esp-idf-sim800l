@@ -597,7 +597,7 @@ esp_err_t sim800l_out_data(sim800l_handle_t sim800l_handle, uint8_t *command, ui
             ESP_LOGE(SIM800L_TAG, "xQueueSend failed"); 
             return ESP_FAIL;
         }
-        ESP_LOGI(SIM800L_TAG, "Command sent: %s", command);
+        
         char respo_temp[MAX_PARAMS_SIZE] = {0};
 
         /* Wait for response */
@@ -1014,7 +1014,6 @@ static void sim800l_bridge_task(void *args)
                 /* Check if the token is a command*/
                 if (strnstr((const char *)command_response, (const char *)token_respose, strlen((const char *)command_response)) != NULL)
                 {
-                    ESP_LOGI(SIM800L_TAG, "Received command checked: %s", token_respose);
                     /* Extract response */
                     token_respose = strtok(NULL, "\r\n");
                     if (token_respose == NULL) ESP_LOGI(SIM800L_TAG, "Vai dar errado");
